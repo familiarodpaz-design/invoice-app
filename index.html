@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador de Facturas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --verde: #38761d;
+    --verde-claro: #eaf3e4;
+    --gris-texto: #424243;
+    --gris-linea: #d9d9d9;
+    --fondo-panel: #f7f7f5;
+    --sombra: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    background: #eef0ec;
+    color:var(--gris-texto);
+    min-height:100vh;
+    padding:24px;
+  }
+
+  .app{
+    max-width:1180px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns: 340px 1fr;
+    gap:28px;
+    align-items:start;
+  }
+
+  @media (max-width: 900px){
+    .app{grid-template-columns: 1fr;}
+  }
+
+  /* ---------- PANEL DE EDICIÓN ---------- */
+  .panel{
+    background:#fff;
+    border-radius:14px;
+    padding:24px;
+    box-shadow:var(--sombra);
+    position:sticky;
+    top:24px;
+  }
+
+  .panel h1{
+    font-size:19px;
+    margin:0 0 4px;
+    color:var(--verde);
+  }
+
+  .panel p.subtitle{
+    margin:0 0 20px;
+    font-size:13px;
+    color:#8b8b8b;
+  }
+
+  .campo{
+    margin-bottom:14px;
+  }
+
+  .campo label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:#6b6b6b;
+    margin-bottom:5px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+
+  .campo input, .campo textarea{
+    width:100%;
+    padding:9px 10px;
+    border:1.5px solid var(--gris-linea);
+    border-radius:8px;
+    font-size:14px;
+    font-family:inherit;
+    color:var(--gris-texto);
+    background:#fcfcfb;
+    transition:border-color .15s;
+  }
+
+  .campo input:focus, .campo textarea:focus{
+    outline:none;
+    border-color:var(--verde);
+    background:#fff;
+  }
+
+  .campo textarea{resize:vertical; min-height:44px;}
+
+  .separador{
+    height:1px;
+    background:var(--gris-linea);
+    margin:18px 0;
+    border:none;
+  }
+
+  .grupo-titulo{
+    font-size:12px;
+    font-weight:700;
+    color:var(--verde);
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    margin-bottom:10px;
+  }
+
+  .fila2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+  }
+
+  .btn{
+    width:100%;
+    padding:13px;
+    border:none;
+    border-radius:10px;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    transition:transform .1s, box-shadow .15s;
+  }
+
+  .btn-descargar{
+    background: var(--verde);
+    color:#fff;
+    margin-top:6px;
+  }
+  .btn-descargar:hover{ box-shadow:0 6px 16px rgba(56,118,29,.35); transform:translateY(-1px); }
+
+  .btn-secundario{
+    background:#fff;
+    color:var(--verde);
+    border:1.5px solid var(--verde);
+    margin-top:8px;
+  }
+  .btn-secundario:hover{ background:var(--verde-claro); }
+
+  .aviso{
+    font-size:12px;
+    color:#8b8b8b;
+    margin-top:10px;
+    line-height:1.5;
+  }
+
+  /* ---------- VISTA PREVIA DE FACTURA ---------- */
+  .preview-wrap{
+    display:flex;
+    justify-content:center;
+  }
+
+  #factura{
+    background:#fff;
+    width:794px;
+    max-width:100%;
+    min-height:1000px;
+    padding:56px 60px;
+    box-shadow:var(--sombra);
+    border-radius:4px;
+    font-size:13px;
+    color:var(--gris-texto);
+  }
+
+  .factura-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:34px;
+  }
+
+  .factura-titulo{
+    font-size:40px;
+    font-weight:800;
+    color:var(--verde);
+    letter-spacing:.02em;
+    margin:0;
+  }
+
+  .meta-derecha{
+    text-align:right;
+    font-size:13px;
+  }
+
+  .meta-derecha .linea{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-bottom:4px;
+  }
+
+  .meta-derecha .etiqueta{
+    font-weight:700;
+  }
+
+  .meta-derecha [contenteditable]{
+    min-width:60px;
+    display:inline-block;
+    border-bottom:1px dashed transparent;
+  }
+  .meta-derecha [contenteditable]:hover,
+  #factura [contenteditable]:hover{
+    border-bottom:1px dashed #b7d1a8;
+    cursor:text;
+  }
+  #factura [contenteditable]:focus{
+    outline:none;
+    border-bottom:1px solid var(--verde);
+    background:var(--verde-claro);
+  }
+
+  .bloque-datos{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:20px;
+    margin-bottom:30px;
+  }
+
+  .bloque-datos .titulo-seccion{
+    font-weight:700;
+    font-size:15px;
+    color:var(--gris-texto);
+    margin-bottom:10px;
+  }
+
+  .bloque-datos .empresa-nombre{
+    font-weight:700;
+    font-size:14px;
+    margin-bottom:6px;
+  }
+
+  .bloque-datos p{
+    margin:4px 0;
+    line-height:1.5;
+  }
+
+  table.items{
+    width:100%;
+    border-collapse:collapse;
+    margin-bottom:22px;
+  }
+
+  table.items thead th{
+    text-align:left;
+    color:var(--verde);
+    font-size:14px;
+    font-weight:700;
+    padding-bottom:8px;
+    border-bottom:2px solid var(--verde);
+  }
+
+  table.items thead th:last-child,
+  table.items thead th:nth-child(3){
+    text-align:right;
+  }
+
+  table.items tbody td{
+    padding:12px 0;
+    font-weight:700;
+    font-size:12.5px;
+    border-bottom:1px solid var(--gris-linea);
+  }
+
+  table.items tbody td:last-child,
+  table.items tbody td:nth-child(3){
+    text-align:right;
+  }
+
+  table.items td.col-cant{ width:70px; }
+  table.items td.col-precio{ width:120px; }
+  table.items td.col-total{ width:120px; }
+
+  .totales{
+    width:260px;
+    margin-left:auto;
+    margin-bottom:60px;
+  }
+
+  .totales .fila{
+    display:flex;
+    justify-content:space-between;
+    padding:6px 0;
+    font-size:13px;
+  }
+
+  .totales .fila.total-final{
+    border-top:2px solid var(--verde);
+    margin-top:6px;
+    padding-top:10px;
+    font-weight:800;
+    font-size:16px;
+    color:var(--verde);
+  }
+
+  .firma{
+    text-align:right;
+    font-style:italic;
+    font-weight:600;
+    padding-top:30px;
+    border-top:1px solid var(--gris-linea);
+  }
+
+  @media print{
+    body{ background:#fff; padding:0; }
+    .panel{ display:none; }
+    .app{ grid-template-columns:1fr; }
+    #factura{ box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===================== PANEL DE CONTROL ===================== -->
+  <div class="panel">
+    <h1>Generador de facturas</h1>
+    <p class="subtitle">Edita los datos y descarga tu factura en PDF</p>
+
+    <div class="grupo-titulo">Concepto y monto</div>
+
+    <div class="campo">
+      <label for="in-concepto">Concepto / Descripción</label>
+      <textarea id="in-concepto">ECOGRAFIA RADIOGRAFIA</textarea>
+    </div>
+
+    <div class="fila2">
+      <div class="campo">
+        <label for="in-cantidad">Cantidad</label>
+        <input type="number" id="in-cantidad" value="1" min="1">
+      </div>
+      <div class="campo">
+        <label for="in-precio">Precio (€)</label>
+        <input type="number" id="in-precio" value="60" step="0.01">
+      </div>
+    </div>
+
+    <div class="fila2">
+      <div class="campo">
+        <label for="in-irpf">IRPF (%)</label>
+        <input type="number" id="in-irpf" value="15" step="0.1">
+      </div>
+      <div class="campo">
+        <label for="in-iva">IVA (%)</label>
+        <input type="number" id="in-iva" value="0" step="0.1">
+      </div>
+    </div>
+
+    <hr class="separador">
+    <div class="grupo-titulo">Fecha y numeración</div>
+
+    <div class="fila2">
+      <div class="campo">
+        <label for="in-numero">Nº Factura</label>
+        <input type="text" id="in-numero" value="10">
+      </div>
+      <div class="campo">
+        <label for="in-fecha">Fecha</label>
+        <input type="date" id="in-fecha">
+      </div>
+    </div>
+
+    <hr class="separador">
+    <div class="grupo-titulo">Datos del cliente</div>
+
+    <div class="campo">
+      <label for="in-nombre">Nombre</label>
+      <input type="text" id="in-nombre" value="RAFAEL EURIPIDES RODRIGUEZ CHIRINOS">
+    </div>
+    <div class="fila2">
+      <div class="campo">
+        <label for="in-nif">NIF/CIF</label>
+        <input type="text" id="in-nif" value="Z0189598Z">
+      </div>
+      <div class="campo">
+        <label for="in-telefono">Teléfono</label>
+        <input type="text" id="in-telefono" value="617262130">
+      </div>
+    </div>
+    <div class="campo">
+      <label for="in-mail">Mail</label>
+      <input type="text" id="in-mail" value="RAFAEURODRIGUEZCH@GMAIL.COM">
+    </div>
+
+    <hr class="separador">
+    <div class="grupo-titulo">Datos de la empresa</div>
+
+    <div class="campo">
+      <label for="in-empresa">Empresa</label>
+      <input type="text" id="in-empresa" value="Master Distancia S.A.U.">
+    </div>
+    <div class="campo">
+      <label for="in-direccion">Dirección</label>
+      <input type="text" id="in-direccion" value="Avda. Manuel Rodriguez Ayuso 158">
+    </div>
+    <div class="fila2">
+      <div class="campo">
+        <label for="in-ciudad">CP / Ciudad</label>
+        <input type="text" id="in-ciudad" value="50012. Zaragoza">
+      </div>
+      <div class="campo">
+        <label for="in-cif-empresa">CIF empresa</label>
+        <input type="text" id="in-cif-empresa" value="A-50715366">
+      </div>
+    </div>
+    <div class="campo">
+      <label for="in-firma">Firma (texto)</label>
+      <input type="text" id="in-firma" value="Rafael Rodriguez">
+    </div>
+
+    <hr class="separador">
+    <div class="grupo-titulo">Descarga</div>
+
+    <div class="campo">
+      <label for="in-archivo">Nombre del archivo</label>
+      <input type="text" id="in-archivo" value="factura_ecografia_radiografia">
+    </div>
+
+    <button class="btn btn-descargar" id="btn-pdf">⬇ Descargar factura (PDF)</button>
+    <button class="btn btn-secundario" id="btn-png">Descargar como imagen (PNG)</button>
+
+    <p class="aviso">También puedes hacer clic directamente sobre cualquier texto de la vista previa para editarlo a mano.</p>
+  </div>
+
+  <!-- ===================== VISTA PREVIA DE FACTURA ===================== -->
+  <div class="preview-wrap">
+    <div id="factura">
+
+      <div class="factura-header">
+        <h1 class="factura-titulo">FACTURA</h1>
+        <div class="meta-derecha">
+          <div class="linea"><span class="etiqueta">Nº FACTURA:</span><span id="v-numero" contenteditable="true">10</span></div>
+          <div class="linea"><span class="etiqueta">FECHA:</span><span id="v-fecha" contenteditable="true">01/07/2026</span></div>
+        </div>
+      </div>
+
+      <div class="bloque-datos">
+        <div>
+          <div class="titulo-seccion">DATOS PERSONALES</div>
+          <p>Nombre: <span id="v-nombre" contenteditable="true">RAFAEL EURIPIDES RODRIGUEZ CHIRINOS</span></p>
+          <p>NIF/CIF: <span id="v-nif" contenteditable="true">Z0189598Z</span></p>
+          <p>Teléfono: <span id="v-telefono" contenteditable="true">617262130</span></p>
+          <p>Mail: <span id="v-mail" contenteditable="true">RAFAEURODRIGUEZCH@GMAIL.COM</span></p>
+        </div>
+        <div style="text-align:right;">
+          <div class="empresa-nombre" id="v-empresa" contenteditable="true">Master Distancia S.A.U.</div>
+          <p id="v-direccion" contenteditable="true">Avda. Manuel Rodriguez Ayuso 158</p>
+          <p id="v-ciudad" contenteditable="true">50012. Zaragoza</p>
+          <p id="v-cif-empresa" contenteditable="true">A-50715366</p>
+        </div>
+      </div>
+
+      <table class="items">
+        <thead>
+          <tr>
+            <th>Cantidad</th>
+            <th>Descripción</th>
+            <th>Precio</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="col-cant" id="v-cantidad">1</td>
+            <td id="v-concepto">ECOGRAFIA RADIOGRAFIA</td>
+            <td class="col-precio" id="v-precio-unit">60 EUROS</td>
+            <td class="col-total" id="v-total-linea">60 EUROS</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="totales">
+        <div class="fila"><span>SUBTOTAL:</span><span id="v-subtotal">60 €</span></div>
+        <div class="fila"><span id="v-irpf-label">IRPF (15%)</span><span id="v-irpf-valor">9 €</span></div>
+        <div class="fila"><span id="v-iva-label">IVA (0%):</span><span id="v-iva-valor">0 €</span></div>
+        <div class="fila total-final"><span>TOTAL:</span><span id="v-total-final">51 €</span></div>
+      </div>
+
+      <div class="firma" id="v-firma">Rafael Rodriguez</div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function hoy(){
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  }
+  $('in-fecha').value = hoy();
+
+  function formatoFecha(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function fmt(n){
+    if(isNaN(n)) return '0';
+    return (Math.round(n*100)/100).toString().replace('.', ',');
+  }
+
+  function recalcular(){
+    const concepto = $('in-concepto').value || '';
+    const cantidad = parseFloat($('in-cantidad').value) || 0;
+    const precio = parseFloat($('in-precio').value) || 0;
+    const irpfPct = parseFloat($('in-irpf').value) || 0;
+    const ivaPct = parseFloat($('in-iva').value) || 0;
+    const numero = $('in-numero').value || '';
+    const fecha = $('in-fecha').value;
+
+    const totalLinea = cantidad * precio;
+    const irpfValor = totalLinea * (irpfPct/100);
+    const ivaValor = totalLinea * (ivaPct/100);
+    const totalFinal = totalLinea - irpfValor + ivaValor;
+
+    $('v-numero').textContent = numero;
+    $('v-fecha').textContent = formatoFecha(fecha);
+
+    $('v-nombre').textContent = $('in-nombre').value;
+    $('v-nif').textContent = $('in-nif').value;
+    $('v-telefono').textContent = $('in-telefono').value;
+    $('v-mail').textContent = $('in-mail').value;
+
+    $('v-empresa').textContent = $('in-empresa').value;
+    $('v-direccion').textContent = $('in-direccion').value;
+    $('v-ciudad').textContent = $('in-ciudad').value;
+    $('v-cif-empresa').textContent = $('in-cif-empresa').value;
+
+    $('v-cantidad').textContent = cantidad;
+    $('v-concepto').textContent = concepto;
+    $('v-precio-unit').textContent = `${fmt(precio)} EUROS`;
+    $('v-total-linea').textContent = `${fmt(totalLinea)} EUROS`;
+
+    $('v-subtotal').textContent = `${fmt(totalLinea)} €`;
+    $('v-irpf-label').textContent = `IRPF (${fmt(irpfPct)}%)`;
+    $('v-irpf-valor').textContent = `-${fmt(irpfValor)} €`;
+    $('v-iva-label').textContent = `IVA (${fmt(ivaPct)}%):`;
+    $('v-iva-valor').textContent = `${fmt(ivaValor)} €`;
+    $('v-total-final').textContent = `${fmt(totalFinal)} €`;
+
+    $('v-firma').textContent = $('in-firma').value;
+  }
+
+  document.querySelectorAll('.panel input, .panel textarea').forEach(el=>{
+    el.addEventListener('input', recalcular);
+  });
+
+  recalcular();
+
+  function nombreArchivo(ext){
+    let base = $('in-archivo').value.trim() || 'factura';
+    base = base.replace(/[^a-zA-Z0-9-_ áéíóúÁÉÍÓÚñÑ]/g,'').replace(/\s+/g,'_');
+    return `${base}.${ext}`;
+  }
+
+  async function capturar(){
+    const nodo = $('factura');
+    return await html2canvas(nodo, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true
+    });
+  }
+
+  $('btn-png').addEventListener('click', async () => {
+    const btn = $('btn-png');
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Generando...';
+    btn.disabled = true;
+    try{
+      const canvas = await capturar();
+      const link = document.createElement('a');
+      link.download = nombreArchivo('png');
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } finally {
+      btn.textContent = textoOriginal;
+      btn.disabled = false;
+    }
+  });
+
+  $('btn-pdf').addEventListener('click', async () => {
+    const btn = $('btn-pdf');
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Generando...';
+    btn.disabled = true;
+    try{
+      const canvas = await capturar();
+      const imgData = canvas.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(nombreArchivo('pdf'));
+    } finally {
+      btn.textContent = textoOriginal;
+      btn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>
